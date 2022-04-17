@@ -138,7 +138,7 @@ ica = FastICA(
     fun_args={
         "alpha": 1.0
     },
-    max_iter=200,
+    max_iter=20000,
     tol=0.00001,
 )
 # Fit that data
@@ -206,9 +206,16 @@ discharge_final = fitted_df['discharge'].values.tolist()
 baseflow_tide_final = baseflow_tide.values.tolist()
 baseflow_tide_runoff_final = baseflow_tide_runoff.values.tolist()
 final_data = []
+
+
+def weirdTimestampToDateFormat(time_stamp):
+    time_stamp = time_stamp / 1000000000
+    return datetime.fromtimestamp(time_stamp).strftime("%m/%d/%Y %H:%M")
+
+
 for i in range(len(datetime_final)):
     final_data.append({
-        'datetime': datetime_final[i],
+        'datetime': weirdTimestampToDateFormat(datetime_final[i]),
         'discharge': discharge_final[i],
         'baseflow_tide': baseflow_tide_final[i],
         'baseflow_tide_runoff': baseflow_tide_runoff_final[i],
