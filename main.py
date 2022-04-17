@@ -8,6 +8,10 @@ from sklearn.decomposition import fastica, FastICA
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns  # Pretty graphs
+import statsmodels.formula.api as smf
+from statsmodels.regression.linear_model import RegressionResultsWrapper
+from statsmodels.graphics.gofplots import ProbPlot
 
 # Set a date range
 start = datetime(
@@ -113,25 +117,20 @@ for site in usgs_data.keys():
                 break
     print(site, len(merged_data[site]))
 
-# print(len(usgs_data))
-# print(len(discharge_data))
-# print(len(merged_data))
-
-# NEW FastICA RESHAPING
+# FastICA arrays
 timestamp_arr = [x[0] for x in merged_data['2172035']]
 datetime_arr = [x[1] for x in merged_data['2172035']]
 gage_arr = [x[2] for x in merged_data['2172035']]
 discharge_arr = [x[3] for x in merged_data['2172035']]
 
-time = np.linspace(0, len(timestamp_arr) - 1, len(timestamp_arr))
+# Relevant series with datetime
+gage_series = pd.Series(data=gage_arr, index=datetime_arr)
+discharge_series = pd.Series(data=discharge_arr, index=datetime_arr)
 
-# md_array = [
-#     timestamp_arr,
-#     gage_arr,
-#     discharge_arr
-# ]
-x = pd.DataFrame({'discharge': discharge_arr, 'gage': gage_arr})
+# DataFrame with the time series
+x = pd.DataFrame({'discharge': discharge_series, 'gage': gage_series})
 
+# FastICA model that we will fit our data into
 ica = FastICA(
     n_components=2,
     algorithm="parallel",
@@ -142,71 +141,62 @@ ica = FastICA(
     max_iter=200,
     tol=0.00001,
 )
-
+# Fit that data
 S_ = ica.fit_transform(x)
-A_ = ica.mixing_
-print("x: ", len(x),  x)
-print("S_:", len(S_), S_)
-print("A_:", len(A_), A_)
 
-plt.figure(figsize=(9, 6))
+# Fit result of ICA to the series
+S_series1 = pd.Series(data=S_[:, 0], index=datetime_arr)
+S_series2 = pd.Series(data=S_[:, 1], index=datetime_arr)
 
-model = LinearRegression()
-model.fit(S_, x[['discharge']])
-print("S model coef:", model.coef_)
+# Set up the plotting library
+plt.style.use('seaborn') # pretty matplotlib plots
+plt.rc('font', size=14)
+plt.rc('figure', titlesize=18)
+plt.rc('axes', labelsize=15)
+plt.rc('axes', titlesize=18)
 
-# x['datetime'] = datetime_arr
-# x['timestamp'] = timestamp_arr
+"""Do linear regression"""
+# Linear Regression math
+model_f = 'discharge ~ s1 + s2'
 
-plt.hist(x[['discharge']].values)
-plt.hist(model.predict(x))
+# Create New DataFrame with:
+# - Gage
+# - Discharge
+# - Signal 1 from FastICA
+# - Signal 2 from FastICA
+fitted_df = x
+fitted_df['s1'] = S_[:, 0]
+fitted_df['s2'] = S_[:, 1]
+fitted_df['discharge'] = pd.to_numeric(fitted_df['discharge'])
+fitted_df['gage'] = pd.to_numeric(fitted_df['gage'])
+fitted_df['datetime'] = pd.to_datetime(datetime_arr)
+
+# Drop NA
+fitted_df.dropna(inplace=True)
+
+# IDK but this helped
+fitted_df.reset_index(drop=True, inplace=True)
+
+# This is the actual LinearRegression
+model = smf.ols(formula=model_f, data=fitted_df)
+model_fit: RegressionResultsWrapper = model.fit()
+
+# Coefficients (Intersect [0], signal coefficient [1], signal coefficient [2])
+coefs = model_fit.params
+
+# Create the results
+fitted_df['baseflow+tide'] = x[['s1']] * coefs[1] + coefs[0]
+fitted_df['baseflow+tide+runoff'] = x[['s1']] * coefs[1] + coefs[0]
+
+# Plot the data
+plt.plot(fitted_df[['discharge']])
+plt.plot(fitted_df[['baseflow+tide']])
+plt.plot(fitted_df[['baseflow+tide+runoff']])
 plt.show()
 
-# x['datetime'] = datetime_arr
-# x['timestamp'] = timestamp_arr
-# plt.scatter(x['datetime'], x['discharge'], color='red')
-# plt.plot(x['datetime'], model.predict(x['datetime']), color='blue')
-# plt.title('Salary vs Experience')
-# plt.xlabel('Years of Experience')
-# plt.ylabel('Salary')
-# plt.show()
+# Export the data
+final_data = discharge_series
+final_data['baseflow+tide'] = fitted_df[['baseflow+tide']]
+final_data['baseflow+tide+runoff'] = fitted_df[['baseflow+tide+runoff']]
+final_data.to_csv('./exported_data.csv')
 
-# OLD WAY
-# md_array = [
-#     datetime_arr,
-#     gage_arr,
-#     discharge_arr
-# ]
-#
-# K, W, S, X_mean = fastica(
-#     X=md_array,
-#     n_components=3,
-#     algorithm="parallel",
-#     fun="logcosh",
-#     fun_args={
-#         "alpha": 1.0
-#     },
-#     max_iter=200,
-#     tol=0.00001,
-#     return_X_mean=True
-# )
-#
-# print("K:", K)
-# print("W:", W)
-# print("S:", S)
-# print("X_mean:", X_mean)
-#
-# print("Shape1:", S.shape)
-# print("Shape2:", len(md_array[-1]))
-#
-# model = LinearRegression()
-# model.fit(S, md_array[-1])
-#
-# plt.scatter(S[0] + S[1], md_array[-1], color='red')
-# plt.plot(S[0] + S[1], model.predict(S[0] + S[1]), color='blue')
-#
-# plt.title('TITLE')
-# plt.xlabel('X LABEL')
-# plt.ylabel('Y LABEL')
-# plt.show()
-# plt.plot(*result)
