@@ -185,18 +185,39 @@ model_fit: RegressionResultsWrapper = model.fit()
 coefs = model_fit.params
 
 # Create the results
-fitted_df['baseflow+tide'] = x[['s1']] * coefs[1] + coefs[0]
-fitted_df['baseflow+tide+runoff'] = x[['s1']] * coefs[1] + coefs[0]
+baseflow_tide = x['s1'] * coefs[1] + coefs[0]
+baseflow_tide_runoff = (
+        (
+                coefs[1] * fitted_df['s1']
+        ).add(coefs[0])
+).add(
+    coefs[2] * fitted_df['s2']
+)
 
 # Plot the data
 plt.plot(fitted_df[['discharge']])
-plt.plot(fitted_df[['baseflow+tide']])
-plt.plot(fitted_df[['baseflow+tide+runoff']])
+plt.plot(baseflow_tide)
+plt.plot(baseflow_tide_runoff)
 plt.show()
 
 # Export the data
-final_data = discharge_series
-final_data['baseflow+tide'] = fitted_df[['baseflow+tide']]
-final_data['baseflow+tide+runoff'] = fitted_df[['baseflow+tide+runoff']]
-final_data.to_csv('./exported_data.csv')
+datetime_final = fitted_df['datetime'].values.tolist()
+discharge_final = fitted_df['discharge'].values.tolist()
+baseflow_tide_final = baseflow_tide.values.tolist()
+baseflow_tide_runoff_final = baseflow_tide_runoff.values.tolist()
+final_data = []
+for i in range(len(datetime_final)):
+    final_data.append({
+        'datetime': datetime_final[i],
+        'discharge': discharge_final[i],
+        'baseflow_tide': baseflow_tide_final[i],
+        'baseflow_tide_runoff': baseflow_tide_runoff_final[i],
+    })
+
+print(final_data[0])
+
+with open('exported_data.csv', 'w') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=final_data[0].keys())
+    writer.writeheader()
+    writer.writerows(final_data)
 
