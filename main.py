@@ -208,6 +208,7 @@ baseflow_tide_runoff_final = baseflow_tide_runoff.values.tolist()
 final_data = []
 
 
+# Function needed to fix the date format
 def weirdTimestampToDateFormat(time_stamp):
     time_stamp = time_stamp / 1000000000
     return datetime.fromtimestamp(time_stamp).strftime("%m/%d/%Y %H:%M")
@@ -221,7 +222,7 @@ for i in range(len(datetime_final)):
         'baseflow_tide_runoff': baseflow_tide_runoff_final[i],
     })
 
-print(final_data[0])
+print("First Row:", final_data[0])
 
 with open('exported_data.csv', 'w') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=final_data[0].keys())
